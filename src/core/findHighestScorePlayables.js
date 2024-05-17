@@ -171,8 +171,12 @@ export default async function findHighestScorePlayables(
               handDeducer.splice(charIndexInHandDeducer, 1);
             }
 
+            if (hand.length == handDeducer.length) {
+              return;
+            }
+
             const charValuing = charValuingIsSignificant
-              ? weighter.get(char) || 0
+              ? weighter[char] || 0
               : 0;
 
             let charValuingMultiplier = 1;
@@ -227,7 +231,7 @@ export default async function findHighestScorePlayables(
                       .getOccupant()[1] == true;
 
                   if (significant) {
-                    baseCharsValuing += weighter.get(baseChar) || 0;
+                    baseCharsValuing += weighter[baseChar] || 0;
                   }
                 }
 
@@ -259,14 +263,18 @@ export default async function findHighestScorePlayables(
           }
 
           //do final
-          const playScore =
-            wordValuing * wordValuingMultiplier + formedCrossWordsScore;
+          const isBingo = hand.length == 7 && handDeducer.length == 0;
 
-          if (!result.has(playScore)) {
-            result.set(playScore, []);
+          const playScore =
+            wordValuing * wordValuingMultiplier +
+            formedCrossWordsScore +
+            (isBingo ? 50 : 0);
+
+          if (result[playScore] == undefined) {
+            result[playScore] = [];
           }
 
-          const resultPlayScoreEntries = result.get(playScore);
+          const resultPlayScoreEntries = result[playScore];
           resultPlayScoreEntries.push([i, j, true, word]);
         })();
 
@@ -344,8 +352,12 @@ export default async function findHighestScorePlayables(
               handDeducer.splice(charIndexInHandDeducer, 1);
             }
 
+            if (hand.length == handDeducer.length) {
+              return;
+            }
+
             const charValuing = charValuingIsSignificant
-              ? weighter.get(char) || 0
+              ? weighter[char] || 0
               : 0;
 
             let charValuingMultiplier = 1;
@@ -400,7 +412,7 @@ export default async function findHighestScorePlayables(
                       .getOccupant()[1] == true;
 
                   if (significant) {
-                    baseCharsValuing += weighter.get(baseChar) || 0;
+                    baseCharsValuing += weighter[baseChar] || 0;
                   }
                 }
 
@@ -433,14 +445,18 @@ export default async function findHighestScorePlayables(
           }
 
           //do final
-          const playScore =
-            wordValuing * wordValuingMultiplier + formedCrossWordsScore;
+          const isBingo = hand.length == 7 && handDeducer.length == 0;
 
-          if (!result.has(playScore)) {
-            result.set(playScore, []);
+          const playScore =
+            wordValuing * wordValuingMultiplier +
+            formedCrossWordsScore +
+            (isBingo ? 50 : 0);
+
+          if (result[playScore] == undefined) {
+            result[playScore] = [];
           }
 
-          const resultPlayScoreEntries = result.get(playScore);
+          const resultPlayScoreEntries = result[playScore];
           resultPlayScoreEntries.push([i, j, false, word]);
         })();
       }
@@ -452,12 +468,12 @@ export default async function findHighestScorePlayables(
 
   console.log(`RESULT...`);
 
-  const resultKeysSorted = Array.from(result.keys()).sort((a, b) => b - a);
+  const resultKeysSorted = Array.from(Object.keys(result).map((item)=>parseInt(item))).sort((a, b) => b - a);
 
   let count = 0;
   for (const key of resultKeysSorted) {
     console.log(`For ${key} point(s)`);
-    const resultPlayScoreEntries = result.get(key);
+    const resultPlayScoreEntries = result[key];
     for (const item of resultPlayScoreEntries) {
       count += 1;
 

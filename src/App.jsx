@@ -5,9 +5,7 @@ import findHighestScorePlayables from "./core/findHighestScorePlayables";
 
 // Dictionary: https://github.com/redbo/scrabble/blob/master/dictionary.txt
 
-function BoardState(size) {
-  const [width, height] = size;
-
+function BoardState([width, height]) {
   const buildLength = width * height;
 
   const build = [];
@@ -16,7 +14,7 @@ function BoardState(size) {
     build.push(new BoardStateCell());
   }
 
-  this.getSize = () => size;
+  this.getSize = () => [width, height];
 
   this.getCell = ([x, y]) => {
     if (x < width && y < height) {
@@ -24,7 +22,49 @@ function BoardState(size) {
     }
     return undefined;
   };
+
+  this.toTransferrable = () => {
+    const transferrableObj = [];
+    for (let i = 0; i < width; i++) {
+      const column = [];
+      for (let j = 0; j < height; j++) {
+        const item = this.getCell([i, j]);
+        column.push({
+          dl: item.getDl(),
+          dw: item.getDw(),
+          tl: item.getTl(),
+          tw: item.getTw(),
+          occupant: item.getOccupant(),
+        });
+      }
+      transferrableObj.push(column);
+    }
+
+    return JSON.stringify(transferrableObj);
+  };
 }
+
+BoardState.fromTransferrable = (transferrable) => {
+  const transferrableObj = JSON.parse(transferrable);
+  const boardState = new BoardState([
+    transferrableObj.length,
+    transferrableObj[0]?.length || 0,
+  ]);
+  for (let i = 0; i < transferrableObj.length; i++) {
+    const column = transferrableObj[i];
+    for (let j = 0; j < column.length; j++) {
+      const item = column[j];
+      const cell = boardState.getCell([i, j]);
+      cell.setDl(item.dl);
+      cell.setDw(item.dw);
+      cell.setTl(item.tl);
+      cell.setTw(item.tw);
+      cell.setOccupant(item.occupant);
+    }
+  }
+
+  return boardState;
+};
 
 function BoardStateCell({ dl, dw, tl, tw, occupant } = {}) {
   let _dl = false;
@@ -82,40 +122,41 @@ export default function App() {
     new ValueNotifier(new BoardState([15, 15]))
   ).current;
   const focusNotifier = useRef(new ValueNotifier(undefined)).current;
-  const weighterNotifier = useRef(new ValueNotifier(new Map())).current;
+  const weighterNotifier = useRef(new ValueNotifier({})).current;
   const handNotifier = useRef(new ValueNotifier([])).current;
   const dictionaryFetcherNotifier = useRef(new ValueNotifier(null)).current;
 
   function doStandardizeWeighter() {
     weighterNotifier.notifyUpdate((value) => {
-      value.clear();
-      value.set(null, 0);
-      value.set("A", 1);
-      value.set("B", 3);
-      value.set("C", 3);
-      value.set("D", 2);
-      value.set("E", 1);
-      value.set("F", 5);
-      value.set("G", 2);
-      value.set("H", 4);
-      value.set("I", 1);
-      value.set("J", 8);
-      value.set("K", 5);
-      value.set("L", 1);
-      value.set("M", 3);
-      value.set("N", 1);
-      value.set("O", 1);
-      value.set("P", 3);
-      value.set("Q", 10);
-      value.set("R", 1);
-      value.set("S", 1);
-      value.set("T", 1);
-      value.set("U", 1);
-      value.set("V", 4);
-      value.set("W", 4);
-      value.set("X", 8);
-      value.set("Y", 4);
-      value.set("Z", 10);
+      for (const key of Object.keys(value)) {
+        delete value[key];
+      }
+      value["A"] = 1;
+      value["B"] = 3;
+      value["C"] = 3;
+      value["D"] = 2;
+      value["E"] = 1;
+      value["F"] = 5;
+      value["G"] = 2;
+      value["H"] = 4;
+      value["I"] = 1;
+      value["J"] = 8;
+      value["K"] = 5;
+      value["L"] = 1;
+      value["M"] = 3;
+      value["N"] = 1;
+      value["O"] = 1;
+      value["P"] = 3;
+      value["Q"] = 10;
+      value["R"] = 1;
+      value["S"] = 1;
+      value["T"] = 1;
+      value["U"] = 1;
+      value["V"] = 4;
+      value["W"] = 4;
+      value["X"] = 8;
+      value["Y"] = 4;
+      value["Z"] = 10;
     });
   }
 
@@ -180,12 +221,57 @@ export default function App() {
       return;
     }
 
-    const result = findHighestScorePlayables(
-      boardState,
-      hand,
-      dictionary,
-      weighter
+    // console.log("AAAAAAAAAA", JSON.parse(boardState.toTransferrable()));
+
+    console.log("FETCHING...");
+
+    const response = await fetch(
+      `https://scrabbler-miner-server.onrender.com/findPlayables`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          boardStateTransferrable: boardState.toTransferrable(),
+          hand,
+          dictionary,
+          weighter,
+        }),
+      }
     );
+
+    const result = await response.json();
+
+    console.log(`RESULT...`);
+
+    const resultKeysSorted = Array.from(
+      Object.keys(result).map((item) => parseInt(item))
+    ).sort((a, b) => b - a);
+
+    let count = 0;
+    for (const key of resultKeysSorted) {
+      console.log(`For ${key} point(s)`);
+      const resultPlayScoreEntries = result[key];
+      for (const item of resultPlayScoreEntries) {
+        count += 1;
+
+        const [i, j, horizontallyElseVertically, word] = item;
+
+        console.log(
+          `${count}. ${word} @ [${i},${j}] - ${
+            horizontallyElseVertically ? "HORIZONTAL" : "VERTICAL"
+          }`
+        );
+      }
+    }
+
+    // const result = findHighestScorePlayables(
+    //   boardState,
+    //   hand,
+    //   dictionary,
+    //   weighter
+    // );
     // console.log(result);
   }
 
@@ -350,7 +436,8 @@ export default function App() {
           if (focus[1] != undefined) {
             const charUpperCased = ev.key.toUpperCase();
             const weighter = weighterNotifier.getValue();
-            if (weighter.has(charUpperCased)) {
+
+            if (weighter[charUpperCased] != undefined) {
               const isBlank = ev.shiftKey;
               boardStateNotifier.notifyUpdate((value) => {
                 value.getCell(focus[1]).setOccupant([charUpperCased, !isBlank]);
@@ -364,7 +451,7 @@ export default function App() {
           const charUpperCased = ev.key == " " ? null : ev.key.toUpperCase();
 
           const weighter = weighterNotifier.getValue();
-          if (weighter.has(charUpperCased)) {
+          if (weighter[charUpperCased] != undefined || charUpperCased==null) {
             if (ev.shiftKey) {
               handNotifier.notifyUpdate((value) => {
                 value.push(charUpperCased);
@@ -682,7 +769,7 @@ export default function App() {
                                         }}
                                       >
                                         {significant
-                                          ? weighter.get(letter)
+                                          ? weighter[letter] || 0
                                           : "X"}
                                       </div>
                                     </div>
@@ -801,7 +888,7 @@ export default function App() {
                             fontSize: "15px",
                           }}
                         >
-                          {item != null ? weighter.get(item) : "X"}
+                          {item != null ? weighter[item] || 0 : "X"}
                         </div>
                       </div>
                     </div>
