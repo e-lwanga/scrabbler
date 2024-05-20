@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { ValueNotifier, ValueNotifiersListener } from "./lib/values";
 import PromiseBuilder from "./lib/promise_builder";
 import findHighestScorePlayables from "./core/findHighestScorePlayables";
+import {
+  createRemoteSocketFunctionRunner,
+  runRemoteHttpFunction,
+} from "./FunctionRunner";
 
 // Dictionary: https://github.com/redbo/scrabble/blob/master/dictionary.txt
 
@@ -221,27 +225,100 @@ export default function App() {
       return;
     }
 
-    // console.log("AAAAAAAAAA", JSON.parse(boardState.toTransferrable()));
+    const dictionaryWords = dictionary.split("\n");
+
+    const functionServersAddresses = [
+      `https://scrabbler-function-server-1.onrender.com`,
+      `https://scrabbler-function-server-2.onrender.com`,
+      `https://scrabbler-function-server-3.onrender.com`,
+      `https://scrabbler-function-server-4.onrender.com`,
+      `https://scrabbler-function-server-5.onrender.com`,
+      // `http://localhost`,
+    ];
 
     console.log("FETCHING...");
 
-    const response = await fetch(
-      `https://scrabbler-miner-server.onrender.com/findPlayables`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          boardStateTransferrable: boardState.toTransferrable(),
-          hand,
+    const dictionaryWordsCountPerServer = Math.floor(
+      dictionaryWords.length / functionServersAddresses.length
+    );
+    const remainderDictionaryWordsCount =
+      dictionaryWords.length % functionServersAddresses.length;
+
+    const results = await Promise.all(
+      functionServersAddresses.map((item, i) => {
+        console.log(
+          `running on server ${i}. Index:${
+            i * dictionaryWordsCountPerServer
+          }; Count:${dictionaryWordsCountPerServer}`
+        );
+        return runRemoteHttpFunction(item, {
+          boardState,
           dictionary,
+          hand,
           weighter,
-        }),
-      }
+          dictionaryWordsStartIndex: i * dictionaryWordsCountPerServer,
+          dictionaryWordsIndexingCount: dictionaryWordsCountPerServer,
+        }).then((value) => {
+          console.log(`server ${i} is done`);
+          return value;
+        });
+      })
     );
 
-    const result = await response.json();
+    const result = {};
+    for (const item of results) {
+      for (const key of Object.keys(item)) {
+        if (result[key] == undefined) {
+          result[key] = [];
+        }
+        result[key].push(...item[key]);
+      }
+    }
+
+    // const result = await runRemoteHttpFunction(`http://localhost`, {
+    //   boardState,
+    //   dictionary,
+    //   hand,
+    //   weighter,
+    //   dictionaryWordsStartIndex: 0,
+    //   dictionaryWordsIndexingCount: 1000,
+    //   // dictionaryWordsIndexingCount: dictionaryWords.length,
+    // });
+
+    // const functionRunner = await createRemoteSocketFunctionRunner(
+    //   `http://localhost`,
+    //   async (run) => {
+    //     return await run({
+    //       boardState,
+    //       dictionary,
+    //       hand,
+    //       weighter,
+    //       dictionaryWordsStartIndex: 0,
+    //       dictionaryWordsIndexingCount: 1000,
+    //       // dictionaryWordsIndexingCount: dictionaryWords.length,
+    //     });
+    //   }
+    // );
+
+    // const result = await functionRunner.use();
+
+    // const response = await fetch(
+    //   `https://scrabbler-miner-server.onrender.com/findPlayables`,
+    //   {
+    //     method: "POST",
+    //     headers: {
+    //       "Content-Type": "application/json",
+    //     },
+    //     body: JSON.stringify({
+    //       boardStateTransferrable: boardState.toTransferrable(),
+    //       hand,
+    //       dictionary,
+    //       weighter,
+    //     }),
+    //   }
+    // );
+
+    // const result = await response.json();
 
     console.log(`RESULT...`);
 
@@ -265,14 +342,6 @@ export default function App() {
         );
       }
     }
-
-    // const result = findHighestScorePlayables(
-    //   boardState,
-    //   hand,
-    //   dictionary,
-    //   weighter
-    // );
-    // console.log(result);
   }
 
   useEffect(() => {
@@ -451,7 +520,7 @@ export default function App() {
           const charUpperCased = ev.key == " " ? null : ev.key.toUpperCase();
 
           const weighter = weighterNotifier.getValue();
-          if (weighter[charUpperCased] != undefined || charUpperCased==null) {
+          if (weighter[charUpperCased] != undefined || charUpperCased == null) {
             if (ev.shiftKey) {
               handNotifier.notifyUpdate((value) => {
                 value.push(charUpperCased);
@@ -510,7 +579,9 @@ export default function App() {
                       return <>{`dictionary error: ${data}`}</>;
                     }
 
-                    return <>{`${data.length} words`}</>;
+                    const dictionaryWords = data.split("\n");
+
+                    return <>{`${dictionaryWords.length} words`}</>;
                   }}
                 />
               );
@@ -543,7 +614,7 @@ export default function App() {
                 const fileReader = new FileReader();
                 fileReader.onload = (e) => {
                   const fileContent = e.target.result;
-                  resolve(fileContent.split("\n"));
+                  resolve(fileContent);
                 };
                 fileReader.onerror = (e) => {
                   reject(e);
